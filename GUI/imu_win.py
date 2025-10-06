@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import messagebox
-import matplotlib.pyplot as plt
 
 # start in dark mode
 FONTCOLOR = "#E0E0E0" 
