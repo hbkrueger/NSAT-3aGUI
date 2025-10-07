@@ -6,12 +6,12 @@ NSAT Pi streaming server with UDP discovery (wired + wireless).
 """
 import json, socket, threading, time
 from data_generator import generator
-
+ 
 TCP_HOST, TCP_PORT = "0.0.0.0", 5050
 UDP_HOST, UDP_PORT = "0.0.0.0", 5051
 HANDSHAKE = b"SUBSCRIBE\n"
 TARGET_HZ = 200.0
-
+ 
 def tcp_client_thread(conn, addr):
     conn.settimeout(2.0)
     try:
@@ -34,7 +34,7 @@ def tcp_client_thread(conn, addr):
     finally:
         try: conn.close()
         except: pass
-
+ 
 def tcp_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -45,7 +45,7 @@ def tcp_server():
             conn, addr = s.accept()
             print("[TCP] Client connected:", addr)
             threading.Thread(target=tcp_client_thread, args=(conn, addr), daemon=True).start()
-
+ 
 def udp_server():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -63,7 +63,7 @@ def udp_server():
             payload = json.dumps({"service":"nsat","port":TCP_PORT,"host":reply_ip}).encode("utf-8")
             try: s.sendto(payload, raddr)
             except OSError: pass
-
+ 
 if __name__ == "__main__":
     threading.Thread(target=udp_server, daemon=True).start()
     tcp_server()

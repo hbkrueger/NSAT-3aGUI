@@ -27,7 +27,7 @@ def generator(target_hz: float = 200.0, imu_gen=None, lc_gen=None):
 		imu_d = next(imu)
 		lc_d = next(load_cell)
 	
-		yield {
+		imu_dict = {
 			"ts": ts, 
 			"ax": imu_d[0], 
 			"ay": imu_d[1], 
@@ -38,6 +38,15 @@ def generator(target_hz: float = 200.0, imu_gen=None, lc_gen=None):
 			"roll": imu_d[6],
 			"pitch": imu_d[7], 
 			"yaw": imu_d[8], 
+		}
+		
+		lc_dict = {
+			"ts": ts,
 			"Newtons": lc_d 
+		}
+		
+		yield {
+			"imu": imu_dict,
+			"load_cell": lc_dict
 		}
 		

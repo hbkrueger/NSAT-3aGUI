@@ -45,7 +45,6 @@ def generator():
             else:
                 raw_val = _nau.read()
                 val = -0.0097 * (raw_val - (-21.475) ) - 7.1090
-                print("AVG DATA A", total/count, end=" ")
                 yield val 
                 
         # load cell throws the occassional IO error. To prevent it from shutting down the whole program we just recycle the last known value.

@@ -1,16 +1,11 @@
 import random, os, json, socket, threading, tkinter as tk
 from tkinter import filedialog as fd, messagebox
 from datetime import datetime
-from imu_win import open_imu_window
 from motor_win import open_motor_window
 from LC_win import open_lc_window
 
-import socket
-import json
-import threading
-
 class PiClient:
-    def __init__(self, host="10.55.0.1", port=5050, callback=None): # Pi static IP: 192.168.1.2
+    def __init__(self, host="172.20.10.3", port=5050, callback=None): # Pi static IP: 172.20.10.3
         self.host = host
         self.port = port
         self.sock = None
@@ -109,12 +104,10 @@ class GUI:
         self.lcLabels={}
         self.lcTexts={}
 
-        self.imuWindow=None
-        self.imuCanvas=None
+        self.imu_window=None
         self.motorWindow=None
         self.motorCanvas=None
-        self.lcWindow=None
-        self.lcCanvas=None
+        self.lc_window=None
         self.staticWindow=None
         self.staticCanvas=None
         self.dynamicWindow=None
@@ -219,6 +212,7 @@ class GUI:
                 relief="solid", 
                 bd=1
             )
+   
     def write_results(self, test):
         if test == "static":
             if self.static_file_name.get(): # if user has entered static_file_name
@@ -365,7 +359,40 @@ class GUI:
             self.canvas.itemconfig(self.texts["pi_status"], text=sample["status"])
         else: # when only sensor data is coming through
             self.latest_sample = sample # Save the latest sample
-            self.reload_connections() # Update statuses on the canvas
+            self.reload_connections()
+ 
+		# gather measurements for standalone IMU window
+        if self.imu_window is not None and self.imu_window.window.winfo_exists():
+            imu_data = sample.get("imu", {})
+            if imu_data:
+                formatted_data = {
+                    "ang_x": imu_data.get("roll", 0),
+                    "ang_y": imu_data.get("pitch", 0),
+                    "ang_z": imu_data.get("yaw", 0),
+                    "vel_x": imu_data.get("gx", 0),
+                    "vel_y": imu_data.get("gy", 0),
+                    "vel_z": imu_data.get("gz", 0),
+                    "acc_x": imu_data.get("ax", 0),
+                    "acc_y": imu_data.get("ay", 0),
+                    "acc_z": imu_data.get("az", 0)
+                }
+                # schedule update in main thread
+                self.root.after(0, lambda: self.imu_window.update_readings(formatted_data))
+                
+        #gather newtons for standalone load cell window
+        if self.lc_window is not None and self.lc_window.window.winfo_exists():
+            lc_data = sample.get("load_cell", {})
+            if lc_data:
+                newtons = lc_data.get("Newtons", 0)
+                self.root.after(0, lambda: self.lc_window.update_readings(newtons))
+				
+				
+            
+            
+            
+            
+            
+        self.reload_connections() # Update statuses on the canvas
 
     #=========================button functions=========================
 
@@ -376,7 +403,7 @@ class GUI:
             self.FONTCOLOR="#E0E0E0"
             self.BUTTONCOLOR="#444444"
             self.WINDOWCOLOR="#121212"
-            self.widgets["darkButton"].config(text="⏾")
+            self.widgets["darkButton"].config(text="☽")
         else:
             self.FONTCOLOR="black"
             self.BUTTONCOLOR="#ffffff"
@@ -388,19 +415,33 @@ class GUI:
         self.canvas.configure(bg=self.WINDOWCOLOR)
 
         # update IMU window's elements
-        if self.imuWindow is not None and self.imuWindow.winfo_exists():
-
-            self.imuWindow.configure(bg=self.WINDOWCOLOR)
-            self.imuCanvas.configure(bg=self.WINDOWCOLOR)
-
-            for button in self.imuButtons.values():
-                button.config(bg=self.WINDOWCOLOR, activebackground=self.BUTTONCOLOR, fg=self.FONTCOLOR, activeforeground=self.FONTCOLOR)
-                
-            for label in self.imuLabels.values():
-                    label.config(fg=self.FONTCOLOR, bg=self.BUTTONCOLOR)
-
-            for text in self.imuTexts.values():
-                self.imuCanvas.itemconfig(text, fill=self.FONTCOLOR)
+        if self.imu_window is not None and self.imu_window.window.winfo_exists():
+			# update color attributes
+            self.imu_window.button_color = self.BUTTONCOLOR
+            self.imu_window.font_color = self.FONTCOLOR
+            self.imu_window.window_color = self.WINDOWCOLOR
+		 
+			# Update window and canvas
+            self.imu_window.window.configure(bg=self.WINDOWCOLOR)
+            self.imu_window.canvas.configure(bg=self.WINDOWCOLOR)
+		 
+			# Update buttons
+            for button in self.imu_window.buttons.values():
+                button.config(
+                    bg=self.BUTTONCOLOR,
+                    activebackground=self.BUTTONCOLOR,
+                    fg=self.FONTCOLOR,
+                    activeforeground=self.FONTCOLOR
+                )
+		 
+			# Update labels
+            for label in self.imu_window.labels.values():
+                label.config(fg=self.FONTCOLOR, bg=self.BUTTONCOLOR)
+		 
+			# Update canvas texts
+            for text_id in self.imu_window.texts.values():
+                self.imu_window.canvas.itemconfig(text_id, fill=self.FONTCOLOR)
+ 
 
         # update motor window's elements
         if self.motorWindow is not None and self.motorWindow.winfo_exists():
@@ -420,18 +461,23 @@ class GUI:
                 self.motorCanvas.itemconfig(text, fill=self.FONTCOLOR)
         
         # update load cell window's elements
-        if self.lcWindow is not None and self.lcWindow.winfo_exists():
-            self.lcWindow.configure(bg=self.WINDOWCOLOR)
-            self.lcCanvas.configure(bg=self.WINDOWCOLOR)
-
-            for button in self.lcButtons.values():
-                button.config(bg=self.WINDOWCOLOR, activebackground=self.BUTTONCOLOR, fg=self.FONTCOLOR, activeforeground=self.FONTCOLOR)
-                
-            for label in self.lcLabels.values():
+        if self.lc_window is not None and self.lc_window.window.winfo_exists():
+            # Update window and canvas colors
+            self.lc_window.window.configure(bg=self.WINDOWCOLOR)
+            self.lc_window.canvas.configure(bg=self.WINDOWCOLOR)
+ 
+			# Update buttons
+            for button in self.lc_window.buttons.values():
+                button.config(bg=self.WINDOWCOLOR, activebackground=self.BUTTONCOLOR,
+                    fg=self.FONTCOLOR, activeforeground=self.FONTCOLOR)
+ 
+            # Update labels
+            for label in self.lc_window.labels.values():
                 label.config(fg=self.FONTCOLOR, bg=self.BUTTONCOLOR)
-
-            for text in self.lcTexts.values():
-                self.lcCanvas.itemconfig(text, fill=self.FONTCOLOR)
+ 
+            # Update canvas text
+            for text_id in self.lc_window.texts.values():
+                self.lc_window.canvas.itemconfig(text_id, fill=self.FONTCOLOR)
 
         # update static window's elements
         if self.staticWindow is not None and self.staticWindow.winfo_exists():
@@ -479,25 +525,34 @@ class GUI:
         sample = getattr(self, "latest_sample", None) # sample = self.latest_sample, return none if doesn't exist
         if not sample:
             return  # no data yet
+           
+        # get data dictionaries from sample
+        imu_dict = sample.get("imu", {})
+        #print(imu_dict)
+        lc_dict = sample.get("load_cell", {}) 
+        #print(lc_dict)
 
         # IMU check: are accel values non-zero-ish?
-        imu_ok = any(abs(sample.get(k, 0)) > 0.001 for k in ["ax", "ay", "az"])
+        imu_ok = any(abs(imu_dict.get(k, 0)) > 0.001 for k in ["ax", "ay", "az"])
         self.canvas.itemconfig(self.rects["imu"], fill="green" if imu_ok else "red")
 
         # Load cell check: is Newtons value changing?
-        lc_ok = abs(sample.get("Newtons", 0)) > 0.001
+        lc_ok = abs(lc_dict.get("Newtons", 0)) > 0.001
         self.canvas.itemconfig(self.rects["lc"], fill="green" if lc_ok else "red")
 
-
-    def standalone_imu(self): # open IMU window  #TODO create IMU graph, make start button work, read IMU data correctly
-        if self.canvas.itemcget(self.rects["imu"], "fill") == "green": # if IMU is connected
-            if (self.imuWindow is None or not self.imuWindow.winfo_exists()): # if imu window isn't open
-                # unpack + pass current color for its colors
-                self.imuWindow, self.imuCanvas, self.imuButtons, self.imuLabels, self.imuTexts = (
-                    open_imu_window(self.WINDOWCOLOR, self.BUTTONCOLOR, self.FONTCOLOR)
-                 ) 
+    def standalone_imu(self):
+        """Open IMU window if IMU is connected."""
+        if self.canvas.itemcget(self.rects["imu"], "fill") == "green":
+			# If window doesn't exist or was closed
+            if self.imu_window is None or not self.imu_window.window.winfo_exists():
+				# Create new IMUWindow instance using instance colors
+                self.imu_window = IMUWindow(master=self.root, 
+										   window_color=self.WINDOWCOLOR, 
+										   button_color=self.BUTTONCOLOR, 
+										   font_color=self.FONTCOLOR)
             else:
-                self.imuWindow.lift() 
+				# Bring existing window to front
+                self.imu_window.window.lift()
         else:
             messagebox.showerror("IMU Error", "IMU not connected.")
 
@@ -513,15 +568,13 @@ class GUI:
         else:
             messagebox.showerror("Motor Error", "Motor not connected.")
 
-    def standalone_lc(self): # open load cell window    #TODO live readings
-        if self.canvas.itemcget(self.rects["lc"], "fill") == "green": # if load cell isn't connected
-            if self.lcWindow is None or not self.lcWindow.winfo_exists(): # if lcwindow isn't open
-                # unpack + pass current color for its colors
-                self.lcWindow, self.lcCanvas, self.lcButtons, self.lcLabels, self.lcTexts = (
-                    open_lc_window(self.WINDOWCOLOR, self.BUTTONCOLOR, self.FONTCOLOR)
-                )
+    def standalone_lc(self):  # open load cell window
+        if self.canvas.itemcget(self.rects["lc"], "fill") == "green":  # if load cell is connected
+            if self.lc_window is None or not self.lc_window.window.winfo_exists():  # if window isn't open
+                # Create the load cell window instance
+                self.lc_window = LoadCellWindow(self.root, self.WINDOWCOLOR, self.BUTTONCOLOR, self.FONTCOLOR)
             else:
-                self.lcWindow.lift() 
+                self.lc_window.window.lift()
         else:
             messagebox.showerror("Load Cell Error", "Load cell not connected.")
 
@@ -751,7 +804,7 @@ class GUI:
         "exitButton": {"text": "Exit", "command": self.exit_function, "width": 5, "font": ("Courier", 10)},
         "startStatic": {"text": "Start Static", "command": self.start_static, "width": 14},
         "startDynamic": {"text": "Start Dynamic", "command": self.start_dynamic, "width": 14},
-        "darkButton": {"text": "⏾", "command": self.dark_light, "width": 3, "font": ("Courier", 16)},
+        "darkButton": {"text": "☽", "command": self.dark_light, "width": 3, "font": ("Courier", 16)},
         }
         # unpack, create buttons
         for name, cfg in self.button_configs.items():
@@ -896,6 +949,170 @@ class GUI:
         #=====Pi Client=====
         self.client = PiClient(callback=self.handle_pi_messages)
         self.client.start()
+ 
+class IMUWindow:
+    def __init__(self, master, window_color="#121212", button_color="#444444", font_color="#E0E0E0"):
+        self.master = master
+        self.window_color = window_color
+        self.button_color = button_color
+        self.font_color = font_color
+ 
+        self.window = tk.Toplevel(master)
+        self.window.title("IMU Data")
+        self.window.geometry("720x620")
+        self.window.resizable(width=False, height=False)
+        self.window.configure(bg=self.window_color)
+ 
+        # Disable closing with [x]
+        self.window.protocol("WM_DELETE_WINDOW", self.disable_close)
+ 
+        # Canvas
+        self.canvas = tk.Canvas(self.window, width=720, height=620, bg=self.window_color, highlightthickness=0)
+        self.canvas.pack()
+ 
+        # Dictionaries for widgets and variables
+        self.vars = {}
+        self.labels = {}
+        self.buttons = {}
+        self.texts = {}
+ 
+        # Initialize StringVars for IMU readings
+        for name in ["ang_x", "ang_y", "ang_z", "vel_x", "vel_y", "vel_z", "acc_x", "acc_y", "acc_z"]:
+            self.vars[name] = tk.StringVar(value="-")
+ 
+        # Buttons
+        self.buttons["exit"] = tk.Button(
+            self.window, text="Exit", command=self.exit_window, width=5, height=1,
+            relief="solid", bg=self.button_color, fg=self.font_color,
+            activebackground=self.button_color, activeforeground=self.font_color,
+            font=("Courier", 10), cursor="hand2"
+        )
+        self.buttons["exit"].place(x=656, y=580)
+ 
+        self.buttons["start"] = tk.Button(
+            self.window, text="Start", command=self.start_function, width=5, height=1,
+            relief="solid", bg=self.button_color, fg=self.font_color,
+            activebackground=self.button_color, activeforeground=self.font_color,
+            font=("Courier", 10), cursor="hand2"
+        )
+        self.buttons["start"].place(x=15, y=580)
+ 
+        # Labels
+        positions = {
+            "ang_x": (430, 67), "ang_y": (505, 67), "ang_z": (580, 67),
+            "vel_x": (430, 107), "vel_y": (505, 107), "vel_z": (580, 107),
+            "acc_x": (430, 147), "acc_y": (505, 147), "acc_z": (580, 147)
+        }
+        for key, pos in positions.items():
+            self.labels[key] = tk.Label(
+                self.window, textvariable=self.vars[key],
+                font=("Courier", 14), fg=self.font_color, bg=self.button_color,
+                bd=1, relief="solid", width=5, height=1
+            )
+            self.labels[key].place(x=pos[0], y=pos[1])
+ 
+        # Canvas text
+        self.texts["angular_displacement"] = self.canvas.create_text(215, 80, text="Angular Displacement (deg):", font=("Courier", 14), fill=self.font_color)
+        self.texts["velocity"] = self.canvas.create_text(270, 120, text="Velocity (m/sec):", font=("Courier", 14), fill=self.font_color)
+        self.texts["acceleration"] = self.canvas.create_text(237, 160, text="Acceleration (m/sec^2):", font=("Courier", 14), fill=self.font_color)
+        self.texts["x"] = self.canvas.create_text(460, 50, text="X", font=("Courier", 14), fill=self.font_color)
+        self.texts["y"] = self.canvas.create_text(534, 50, text="Y", font=("Courier", 14), fill=self.font_color)
+        self.texts["z"] = self.canvas.create_text(608, 50, text="Z", font=("Courier", 14), fill=self.font_color)
+ 
+        # Temporary graph rectangle
+        self.canvas.create_rectangle(190, 230, 540, 580, fill=self.button_color, outline="black", width=2)
+        self.canvas.create_text(360, 415, text="graph", font=("Courier, 20"), fill=self.font_color)
+ 
+    # Disable window close
+    def disable_close(self):
+        pass
+ 
+    # Exit button
+    def exit_window(self):
+        self.window.destroy()
+ 
+    # Start button placeholder
+    def start_function(self):
+        pass
+ 
+    # Update IMU readings dynamically
+    def update_readings(self, imu_data: dict):
+        for key, value in imu_data.items():
+            if key in self.vars:
+                self.vars[key].set(f"{value:.3f}")
+
+class LoadCellWindow:
+    def __init__(self, master, window_color="#121212", button_color="#444444", font_color="#E0E0E0"):
+        self.master = master
+        self.window_color = window_color
+        self.button_color = button_color
+        self.font_color = font_color
+ 
+        # Create window
+        self.window = tk.Toplevel(master)
+        self.window.title("Load Cell Control")
+        self.window.geometry("300x200")
+        self.window.resizable(width=False, height=False)
+        self.window.configure(bg=self.window_color)
+ 
+        # Disable closing with [x]
+        self.window.protocol("WM_DELETE_WINDOW", self.disable_close)
+ 
+        # Initialize start check
+        self.update = False
+        
+        # Canvas
+        self.canvas = tk.Canvas(self.window, width=300, height=200, bg=self.window_color, highlightthickness=0)
+        self.canvas.pack()
+ 
+        # Dictionaries for widgets and variables
+        self.vars = {}
+        self.labels = {}
+        self.buttons = {}
+        self.texts = {}
+ 
+        # StringVar for Newtons
+        self.vars["newtons"] = tk.StringVar(value="-")
+ 
+        # Buttons
+        self.buttons["exit"] = tk.Button(
+            self.window, text="Exit", command=self.exit_window, width=5, height=1,
+            relief="solid", bg=self.button_color, fg=self.font_color,
+            activebackground=self.button_color, activeforeground=self.font_color,
+            font=("Courier", 10), cursor="hand2"
+        )
+        self.buttons["exit"].place(x=242, y=165)
+ 
+        self.buttons["start"] = tk.Button(
+            self.window, text="Start", command=self.start_function, width=5, height=1,
+            relief="solid", bg=self.button_color, fg=self.font_color,
+            activebackground=self.button_color, activeforeground=self.font_color,
+            font=("Courier", 10), cursor="hand2"
+        )
+        self.buttons["start"].place(x=10, y=165)
+ 
+        # Canvas text
+        self.texts["force"] = self.canvas.create_text(116, 83, text="Force (N):", font=("Courier", 14), fill=self.font_color)
+ 
+        # Label for Newtons
+        self.texts["newtons"] = self.canvas.create_text(180, 85, font=("Courier", 14), fill=self.font_color, anchor="w")
+ 
+    # Disable window close
+    def disable_close(self):
+        pass
+ 
+    # Exit button
+    def exit_window(self):
+        self.window.destroy()
+ 
+    # Start button placeholder
+    def start_function(self):
+        self.update = True
+ 
+    # Update load cell reading
+    def update_readings(self, newtons: float):
+        if self.update == True:
+            self.canvas.itemconfig(self.texts["newtons"], text=f"{newtons:.3f}")
 
 # run GUI
 root = tk.Tk()
